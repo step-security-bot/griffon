@@ -1,0 +1,245 @@
+release:
+  prerelease: auto
+  draft: false
+
+env:
+  # required to support multi architecture docker builds
+  - DOCKER_CLI_EXPERIMENTAL=enabled
+  - CGO_ENABLED=0
+
+builds:
+  - id: linux-build
+    binary: griffon
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - ppc64le
+      - s390x
+    # set the modified timestamp on the output binary to the git timestamp to ensure a reproducible build
+    mod_timestamp: &build-timestamp "{{ .CommitTimestamp }}"
+    ldflags: &build-ldflags |
+      -w
+      -s
+      -extldflags '-static'
+      -X github.com/nextlinux/griffon/internal/version.version={{.Version}}
+      -X github.com/nextlinux/griffon/internal/version.gitCommit={{.Commit}}
+      -X github.com/nextlinux/griffon/internal/version.buildDate={{.Date}}
+      -X github.com/nextlinux/griffon/internal/version.gitDescription={{.Summary}}
+
+  - id: darwin-build
+    binary: griffon
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: *build-timestamp
+    ldflags: *build-ldflags
+    hooks:
+      post:
+        - cmd: .tmp/quill sign-and-notarize "{{ .Path }}" --dry-run={{ .IsSnapshot }} --ad-hoc={{ .IsSnapshot }} -vv
+          env:
+            - QUILL_LOG_FILE=/tmp/quill-{{ .Target }}.log
+
+  - id: windows-build
+    binary: griffon
+    goos:
+      - windows
+    goarch:
+      - amd64
+    mod_timestamp: *build-timestamp
+    ldflags: *build-ldflags
+
+archives:
+  - id: linux-archives
+    builds:
+      - linux-build
+
+  - id: darwin-archives
+    builds:
+      - darwin-build
+
+  - id: windows-archives
+    format: zip
+    builds:
+      - windows-build
+
+nfpms:
+  - license: "Apache 2.0"
+    maintainer: "Anchore, Inc"
+    homepage: &website "https://github.com/nextlinux/griffon"
+    description: &description "A vulnerability scanner for container images and filesystems"
+    formats:
+      - rpm
+      - deb
+
+brews:
+  - tap:
+      owner: anchore
+      name: homebrew-griffon
+      token: "{{.Env.GITHUB_BREW_TOKEN}}"
+    ids:
+      - darwin-archives
+      - linux-archives
+    homepage: *website
+    description: *description
+    license: "Apache License 2.0"
+
+dockers:
+  - image_templates:
+      - nextlinux/griffon:debug
+      - nextlinux/griffon:{{.Tag}}-debug
+      - ghcr.io/nextlinux/griffon:debug
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug
+    goarch: amd64
+    dockerfile: Dockerfile.debug
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+  - image_templates:
+      - nextlinux/griffon:debug-arm64v8
+      - nextlinux/griffon:{{.Tag}}-debug-arm64v8
+      - ghcr.io/nextlinux/griffon:debug-arm64v8
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug-arm64v8
+    goarch: arm64
+    dockerfile: Dockerfile.debug
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64/v8"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+  - image_templates:
+      - nextlinux/griffon:debug-ppc64le
+      - nextlinux/griffon:{{.Tag}}-debug-ppc64le
+      - ghcr.io/nextlinux/griffon:debug-ppc64le
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug-ppc64le
+    goarch: ppc64le
+    dockerfile: Dockerfile.debug
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/ppc64le"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+  - image_templates:
+      - nextlinux/griffon:debug-s390x
+      - nextlinux/griffon:{{.Tag}}-debug-s390x
+      - ghcr.io/nextlinux/griffon:debug-s390x
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug-s390x
+    goarch: s390x
+    dockerfile: Dockerfile.debug
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/s390x"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+  - image_templates:
+      - nextlinux/griffon:latest
+      - nextlinux/griffon:{{.Tag}}
+      - ghcr.io/nextlinux/griffon:latest
+      - ghcr.io/nextlinux/griffon:{{.Tag}}
+    goarch: amd64
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+  - image_templates:
+      - nextlinux/griffon:{{.Tag}}-arm64v8
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-arm64v8
+    goarch: arm64
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64/v8"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+  - image_templates:
+      - nextlinux/griffon:{{.Tag}}-ppc64le
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-ppc64le
+    goarch: ppc64le
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/ppc64le"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+  - image_templates:
+      - nextlinux/griffon:{{.Tag}}-s390x
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-s390x
+    goarch: s390x
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/s390x"
+      - "--build-arg=BUILD_DATE={{.Date}}"
+      - "--build-arg=BUILD_VERSION={{.Version}}"
+      - "--build-arg=VCS_REF={{.FullCommit}}"
+      - "--build-arg=VCS_URL={{.GitURL}}"
+
+docker_manifests:
+  - name_template: nextlinux/griffon:latest
+    image_templates:
+      - nextlinux/griffon:{{.Tag}}
+      - nextlinux/griffon:{{.Tag}}-arm64v8
+      - nextlinux/griffon:{{.Tag}}-ppc64le
+      - nextlinux/griffon:{{.Tag}}-s390x
+
+  - name_template: nextlinux/griffon:debug
+      - nextlinux/griffon:{{.Tag}}-debug
+      - nextlinux/griffon:{{.Tag}}-debug-arm64v8
+      - nextlinux/griffon:{{.Tag}}-debug-ppc64le
+      - nextlinux/griffon:{{.Tag}}-debug-s390x
+
+  - name_template: nextlinux/griffon:{{.Tag}}
+    image_templates:
+      - nextlinux/griffon:{{.Tag}}
+      - nextlinux/griffon:{{.Tag}}-arm64v8
+      - nextlinux/griffon:{{.Tag}}-ppc64le
+      - nextlinux/griffon:{{.Tag}}-s390x
+
+  - name_template: ghcr.io/nextlinux/griffon:latest
+    image_templates:
+      - ghcr.io/nextlinux/griffon:{{.Tag}}
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-arm64v8
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-ppc64le
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-s390x
+
+  - name_template: ghcr.io/nextlinux/griffon:debug
+    image_templates:
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug-arm64v8
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug-ppc64le
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-debug-s390x
+
+  - name_template: ghcr.io/nextlinux/griffon:{{.Tag}}
+    image_templates:
+      - ghcr.io/nextlinux/griffon:{{.Tag}}
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-arm64v8
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-ppc64le
+      - ghcr.io/nextlinux/griffon:{{.Tag}}-s390x
